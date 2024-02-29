@@ -19,7 +19,7 @@ def get_candidate_experiments(dataset):
     for exp in all_experiments:
         if "dataset" not in exp.tags:
             continue
-        if exp.tags['dataset'] == name:
+        if exp.tags["dataset"] == name:
             experiment_names_and_ids.append((exp.experiment_id, exp.name))
     return experiment_names_and_ids
 
@@ -52,8 +52,6 @@ class OpenMLFlowPanel(foo.Operator):
                 name="MLFlowPanel", isActive=True, layout="horizontal"
             ),
         )
-
-
 
 
 def register(p):

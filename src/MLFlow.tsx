@@ -1,8 +1,8 @@
 import { registerComponent, PluginComponentType } from "@fiftyone/plugins";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { useRecoilValue } from "recoil";
 import * as fos from "@fiftyone/state";
-import { Box, TextField, Button } from '@mui/material';
+import { Box, TextField, Button } from "@mui/material";
 
 export const MLFlowIcon = ({ size = "1rem", style = {} }) => {
   return (
@@ -28,7 +28,7 @@ export const MLFlowIcon = ({ size = "1rem", style = {} }) => {
             cx="5"
             cy="5"
             r="4"
-            style={{ stroke: 'none' }}
+            style={{ stroke: "none" }}
           ></circle>
         </pattern>
       </defs>
@@ -49,7 +49,7 @@ function useServerAvailability(defaultUrl) {
   const [url, setUrl] = useState(defaultUrl);
 
   useEffect(() => {
-    fetch(url, { mode: 'no-cors' })
+    fetch(url, { mode: "no-cors" })
       .then(() => setServerAvailable(true))
       .catch(() => setServerAvailable(false));
   }, [url]);
@@ -94,10 +94,10 @@ const URLInputForm = ({ onSubmit }) => {
   );
 };
 
-
 export default function MLFlowPanel() {
   const defaultUrl = "http://127.0.0.1:8080";
-  const { serverAvailable, setServerAvailable, url, setUrl } = useServerAvailability(defaultUrl);
+  const { serverAvailable, setServerAvailable, url, setUrl } =
+    useServerAvailability(defaultUrl);
 
   const handleUpdateUrl = (newUrl) => {
     setUrl(newUrl);
@@ -106,7 +106,6 @@ export default function MLFlowPanel() {
   const datasetName = useRecoilValue(fos.datasetName);
   console.log(datasetName);
   // Use this dataset name to get candidate experiment urls...
-
 
   return (
     <Box
@@ -131,7 +130,6 @@ export default function MLFlowPanel() {
     </Box>
   );
 }
-
 
 registerComponent({
   name: "MLFlowPanel",

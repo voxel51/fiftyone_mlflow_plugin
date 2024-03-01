@@ -1,5 +1,5 @@
 {
-  "name": "@jacobmarks/mlflow",
+  "name": "@jacobmarks/mlflow_tracking",
   "version": "1.0.0",
   "main": "src/MLFlow.tsx",
   "license": "MIT",

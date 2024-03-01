@@ -1,8 +1,16 @@
 import { registerComponent, PluginComponentType } from "@fiftyone/plugins";
-import React, { useState, useEffect } from "react";
-import { useRecoilValue } from "recoil";
-import * as fos from "@fiftyone/state";
-import { Box, TextField, Button } from "@mui/material";
+import { useOperatorExecutor } from "@fiftyone/operators";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Stack,
+  Box,
+  TextField,
+  Button,
+  CircularProgress,
+  Select,
+  MenuItem,
+  Typography,
+} from "@mui/material";
 
 export const MLFlowIcon = ({ size = "1rem", style = {} }) => {
   return (
@@ -13,7 +21,7 @@ export const MLFlowIcon = ({ size = "1rem", style = {} }) => {
       style={style}
       viewBox="0 0 600 500"
     >
-      <defs id="defsdoc">
+      <defs id="defs">
         <pattern
           id="patternBool"
           x="0"
@@ -96,6 +104,18 @@ const URLInputForm = ({ onSubmit }) => {
 
 export default function MLFlowPanel() {
   const defaultUrl = "http://127.0.0.1:8080";
+
+  const getExperimentURLs = useOperatorExecutor(
+    "@jacobmarks/mlflow_tracking/get_mlflow_experiment_urls"
+  );
+
+  const [experimentURLValue, setExperimentURLValue] = useState("");
+
+  const handleExperimentURLChange = (event) => {
+    console.log(event.target.value);
+    setExperimentURLValue(event.target.value);
+  };
+
   const { serverAvailable, setServerAvailable, url, setUrl } =
     useServerAvailability(defaultUrl);
 
@@ -103,31 +123,95 @@ export default function MLFlowPanel() {
     setUrl(newUrl);
   };
 
-  const datasetName = useRecoilValue(fos.datasetName);
-  console.log(datasetName);
-  // Use this dataset name to get candidate experiment urls...
+  useEffect(() => {
+    getExperimentURLs.execute();
+  }, []);
+
+  const experimentURLs = useMemo(() => {
+    return getExperimentURLs?.result?.urls;
+  }, [getExperimentURLs]);
+
+  const loadingExperimentURLs = useMemo(() => {
+    return getExperimentURLs?.isExecuting;
+  }, [getExperimentURLs]);
+
+  if (loadingExperimentURLs || Array.isArray(experimentURLs) === false) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          alignItems: "center",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Box
+    <Stack
       sx={{
         width: "100%",
         height: "100%",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
       }}
+      spacing={1}
     >
       {!serverAvailable && <URLInputForm onSubmit={handleUpdateUrl} />}
-      <iframe
-        style={{
-          flexGrow: 1,
-          border: "none",
+      {experimentURLs.length == 0 && <Box>No experiments found</Box>}
+      {experimentURLs.length > 1 && (
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Typography variant="h6" gutterBottom>
+            Select an experiment on this dataset:
+          </Typography>
+          <Select
+            labelId="experiment-select-label"
+            id="experiment-select"
+            value={experimentURLValue}
+            onChange={handleExperimentURLChange}
+            size="small"
+            sx={{ minWidth: 300 }}
+          >
+            {experimentURLs.map((item) => (
+              <MenuItem key={item.url} value={item.url}>
+                {item.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      )}
+      <Box
+        sx={{
+          width: "90%",
+          height: "80%",
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
         }}
-        src={url}
-        title="MLFlow Embedded"
-        allowFullScreen
-      ></iframe>
-    </Box>
+      >
+        <iframe
+          style={{
+            flexGrow: 1,
+            border: "none",
+            width: "100%",
+            height: "100%",
+          }}
+          src={experimentURLValue || defaultUrl}
+          title="MLFlow Embedded"
+          allowFullScreen
+        ></iframe>
+      </Box>
+    </Stack>
   );
 }
 

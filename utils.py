@@ -1,13 +1,3 @@
-"""MLflow Experiment Tracking plugin.
-
-| Copyright 2017-2023, Voxel51, Inc.
-| `voxel51.com <https://voxel51.com/>`_
-|
-"""
-
-import fiftyone.operators as foo
-import fiftyone.operators.types as types
-
 import mlflow
 
 
@@ -26,6 +16,7 @@ def _initialize_fiftyone_run_for_mlflow_experiment(
     - experiment_name: The name of the MLflow experiment to create the run for
     """
     experiment = mlflow.get_experiment_by_name(experiment_name)
+    # tracking_uri = mlflow.get_tracking_uri()
     tracking_uri = tracking_uri or "http://localhost:8080"
 
     config = dataset.init_run()
@@ -93,73 +84,3 @@ def log_mlflow_run_to_fiftyone_dataset(
         )
     if run_id:
         _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id)
-
-
-def get_candidate_experiments(dataset):
-    urls = []
-    name = dataset.name
-    mlflow_experiment_runs = [
-        dataset.get_run_info(r)
-        for r in dataset.list_runs()
-        if dataset.get_run_info(r).config.method == "mlflow_experiment"
-    ]
-
-    for mer in mlflow_experiment_runs:
-        cfg = mer.config
-        name = cfg.experiment_name
-        try:
-            uri = cfg.tracking_uri
-        except:
-            uri = "http://localhost:8080"
-        id = cfg.experiment_id
-        urls.append({"url": f"{uri}/#/experiments/{id}", "name": name})
-
-    return {"urls": urls}
-
-
-class OpenMLFlowPanel(foo.Operator):
-    @property
-    def config(self):
-        _config = foo.OperatorConfig(
-            name="open_mlflow_panel",
-            label="Open MLFlow Panel",
-            unlisted=False,
-        )
-        _config.icon = "/assets/mlflow.svg"
-        return _config
-
-    def resolve_placement(self, ctx):
-        return types.Placement(
-            types.Places.SAMPLES_GRID_SECONDARY_ACTIONS,
-            types.Button(
-                label="Open MLFlow Panel",
-                prompt=False,
-                icon="/assets/mlflow.svg",
-            ),
-        )
-
-    def execute(self, ctx):
-        ctx.trigger(
-            "open_panel",
-            params=dict(
-                name="MLFlowPanel", isActive=True, layout="horizontal"
-            ),
-        )
-
-
-class GetExperimentURLs(foo.Operator):
-    @property
-    def config(self):
-        return foo.OperatorConfig(
-            name="get_mlflow_experiment_urls",
-            label="MLFlow: Get experiment URLs",
-            unlisted=True,
-        )
-
-    def execute(self, ctx):
-        return get_candidate_experiments(ctx.dataset)
-
-
-def register(p):
-    p.register(OpenMLFlowPanel)
-    p.register(GetExperimentURLs)

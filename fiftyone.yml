@@ -1,9 +1,10 @@
-name: "@jacobmarks/mlflow"
+name: "@jacobmarks/mlflow_tracking"
 description: Play YouTube videos in the FiftyOne App!
-version: 0.1.0
+version: 0.1.1
 fiftyone:
   version: ">=0.21.0"
 license: Apache 2.0
 url: "https://github.com/jacobmarks/fiftyone_mlflow_plugin"
 operators:
   - open_mlflow_panel
+  - get_mlflow_experiment_urls

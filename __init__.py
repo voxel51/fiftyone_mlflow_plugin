@@ -117,12 +117,12 @@ def get_candidate_experiments(dataset):
     return {"urls": urls}
 
 
-class OpenMLFlowPanel(foo.Operator):
+class OpenMLflowPanel(foo.Operator):
     @property
     def config(self):
         _config = foo.OperatorConfig(
             name="open_mlflow_panel",
-            label="Open MLFlow Panel",
+            label="Open MLflow Panel",
             unlisted=False,
         )
         _config.icon = "/assets/mlflow.svg"
@@ -142,17 +142,17 @@ class OpenMLFlowPanel(foo.Operator):
         ctx.trigger(
             "open_panel",
             params=dict(
-                name="MLFlowPanel", isActive=True, layout="horizontal"
+                name="MLflowPanel", isActive=True, layout="horizontal"
             ),
         )
 
 
-class GetExperimentURLs(foo.Operator):
+class GetMLflowExperimentURLs(foo.Operator):
     @property
     def config(self):
         return foo.OperatorConfig(
             name="get_mlflow_experiment_urls",
-            label="MLFlow: Get experiment URLs",
+            label="MLflow: Get experiment URLs",
             unlisted=True,
         )
 
@@ -160,6 +160,82 @@ class GetExperimentURLs(foo.Operator):
         return get_candidate_experiments(ctx.dataset)
 
 
+def _initialize_run_output():
+    outputs = types.Object()
+    outputs.str("run_key", label="Run key")
+    outputs.str("timestamp", label="Creation time")
+    outputs.str("version", label="FiftyOne version")
+    outputs.obj("config", label="Config", view=types.JSONView())
+    return outputs
+
+
+def _execute_run_info(ctx, run_key):
+    info = ctx.dataset.get_run_info(run_key)
+
+    timestamp = info.timestamp.strftime("%Y-%M-%d %H:%M:%S")
+    version = info.version
+    config = info.config.serialize()
+    config = {k: v for k, v in config.items() if v is not None}
+
+    return {
+        "run_key": run_key,
+        "timestamp": timestamp,
+        "version": version,
+        "config": config,
+    }
+
+
+class GetMLflowExperimentInfo(foo.Operator):
+    @property
+    def config(self):
+        _config = foo.OperatorConfig(
+            name="get_mlflow_experiment_info",
+            label="MLflow: get experiment info",
+            dynamic=True,
+        )
+        _config.icon = "/assets/mlflow.svg"
+        return _config
+
+    def resolve_input(self, ctx):
+        inputs = types.Object()
+        form_view = types.View(
+            label="MLflow: choose experiment",
+            description="Get information about an MLflow experiment",
+        )
+
+        dataset = ctx.dataset
+        run_keys = [
+            r
+            for r in dataset.list_runs()
+            if dataset.get_run_info(r).config.method == "mlflow_experiment"
+        ]
+
+        run_choices = types.DropdownView()
+        for run_key in run_keys:
+            run_choices.add_choice(run_key, label=run_key)
+
+        inputs.enum(
+            "run_key",
+            run_choices.values(),
+            label="Run key",
+            description="The experiment to retrieve information for",
+            required=True,
+            view=types.DropdownView(),
+        )
+
+        return types.Property(inputs, view=form_view)
+
+    def execute(self, ctx):
+        run_key = ctx.params.get("run_key", None)
+        return _execute_run_info(ctx, run_key)
+
+    def resolve_output(self, ctx):
+        outputs = _initialize_run_output()
+        view = types.View(label="MLflow experiment info")
+        return types.Property(outputs, view=view)
+
+
 def register(p):
-    p.register(OpenMLFlowPanel)
-    p.register(GetExperimentURLs)
+    p.register(OpenMLflowPanel)
+    p.register(GetMLflowExperimentURLs)
+    p.register(GetMLflowExperimentInfo)

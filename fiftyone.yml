@@ -1,6 +1,6 @@
 name: "@jacobmarks/mlflow_tracking"
-description: Play YouTube videos in the FiftyOne App!
-version: 0.1.1
+description: Track model training experiments with MLflow!
+version: 0.1.2
 fiftyone:
   version: ">=0.21.0"
 license: Apache 2.0
@@ -8,3 +8,4 @@ url: "https://github.com/jacobmarks/fiftyone_mlflow_plugin"
 operators:
   - open_mlflow_panel
   - get_mlflow_experiment_urls
+  - get_mlflow_experiment_info

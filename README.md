@@ -33,7 +33,7 @@ pip install fiftyone mlflow
 Then, download the plugin:
 
 ```bash
-fiftyone plugins download https://github.com/jacobmarks/fiftyone-mlflow-plugin
+fiftyone plugins download https://github.com/jacobmarks/fiftyone_mlflow_plugin
 ```
 
 ## Usage
@@ -68,7 +68,7 @@ package_directory = os.path.dirname(
 )
 if package_directory not in sys.path:
     sys.path.append(package_directory)
-from mlflow_plugin import log_mlflow_run_to_fiftyone_dataset
+from fiftyone_mlflow_plugin import log_mlflow_run_to_fiftyone_dataset
 ```
 
 Here are some functions that you may find useful:

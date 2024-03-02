@@ -142,7 +142,7 @@ class OpenMLflowPanel(foo.Operator):
         ctx.trigger(
             "open_panel",
             params=dict(
-                name="MLflowPanel", isActive=True, layout="horizontal"
+                name="MLFlowPanel", isActive=True, layout="horizontal"
             ),
         )
 

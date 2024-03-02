@@ -206,7 +206,7 @@ export default function MLFlowPanel() {
             width: "100%",
             height: "100%",
           }}
-          src={experimentURLValue || defaultUrl}
+          src={experimentURLValue || url}
           title="MLFlow Embedded"
           allowFullScreen
         ></iframe>

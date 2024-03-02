@@ -103,7 +103,7 @@ const URLInputForm = ({ onSubmit }) => {
 };
 
 export default function MLFlowPanel() {
-  const defaultUrl = "http://127.0.0.1:8080";
+  const defaultUrl = "http://127.0.0.1:5000";
 
   const getExperimentURLs = useOperatorExecutor(
     "@jacobmarks/mlflow_tracking/get_mlflow_experiment_urls"

@@ -26,7 +26,7 @@ def _initialize_fiftyone_run_for_mlflow_experiment(
     - experiment_name: The name of the MLflow experiment to create the run for
     """
     experiment = mlflow.get_experiment_by_name(experiment_name)
-    tracking_uri = tracking_uri or "http://localhost:8080"
+    tracking_uri = tracking_uri or "http://localhost:5000"
 
     config = dataset.init_run()
 
@@ -110,7 +110,7 @@ def get_candidate_experiments(dataset):
         try:
             uri = cfg.tracking_uri
         except:
-            uri = "http://localhost:8080"
+            uri = "http://localhost:5000"
         id = cfg.experiment_id
         urls.append({"url": f"{uri}/#/experiments/{id}", "name": name})
 

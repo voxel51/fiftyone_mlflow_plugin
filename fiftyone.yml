@@ -1,6 +1,6 @@
 name: "@jacobmarks/mlflow_tracking"
 description: Track model training experiments with MLflow!
-version: 0.1.2
+version: 0.1.3
 fiftyone:
   version: ">=0.21.0"
 license: Apache 2.0

@@ -191,8 +191,8 @@ export default function MLFlowPanel() {
       )}
       <Box
         sx={{
-          width: "90%",
-          height: "80%",
+          width: "95%",
+          height: "90%",
           overflow: "auto",
           display: "flex",
           flexDirection: "column",

@@ -235,7 +235,37 @@ class GetMLflowExperimentInfo(foo.Operator):
         return types.Property(outputs, view=view)
 
 
+class LogMLflowRun(foo.Operator):
+    @property
+    def config(self):
+        _config = foo.OperatorConfig(
+            name="log_mlflow_run",
+            label="MLflow: Log run to FiftyOne",
+            dynamic=True,
+            unlisted=True,
+        )
+        return _config
+
+    def __call__(self, sample_collection, experiment_name, run_id=None):
+        ctx = dict(view=sample_collection.view())
+        params = dict(
+            experiment_name=experiment_name,
+            run_id=run_id,
+        )
+        return foo.execute_operator(self.uri, ctx, params=params)
+
+    def execute(self, ctx):
+        sample_collection = ctx.view
+        experiment_name = ctx.params.get("experiment_name", None)
+        run_id = ctx.params.get("run_id", None)
+
+        log_mlflow_run_to_fiftyone_dataset(
+            sample_collection, experiment_name, run_id
+        )
+
+
 def register(p):
     p.register(OpenMLflowPanel)
     p.register(GetMLflowExperimentURLs)
     p.register(GetMLflowExperimentInfo)
+    p.register(LogMLflowRun)

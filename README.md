@@ -58,17 +58,11 @@ import fiftyone as fo
 import fiftyone.zoo as foz
 import fiftyone.operators as foo
 import fiftyone.plugins as fop
-import fiftyone.brain as fob
 from fiftyone import ViewField as F
 
 dataset = foz.load_zoo_dataset("quickstart")
 
-package_directory = os.path.dirname(
-    fop.find_plugin("@jacobmarks/mlflow_tracking")
-)
-if package_directory not in sys.path:
-    sys.path.append(package_directory)
-from fiftyone_mlflow_plugin import log_mlflow_run_to_fiftyone_dataset
+log_mlflow_run = foo.get_operator("@jacobmarks/mlflow_tracking/log_mlflow_run")
 ```
 
 Here are some functions that you may find useful:
@@ -159,7 +153,7 @@ def run_fiftyone_mlflow_experiment(
         dataset.info["mlflow"]["runs"].append(run.info.run_id)
         dataset.save()
 
-        log_mlflow_run_to_fiftyone_dataset(
+        log_mlflow_run(
             sample_collection, experiment_name, run_id=run.info.run_id
         )
 

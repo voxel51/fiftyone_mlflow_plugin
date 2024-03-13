@@ -19,6 +19,7 @@ This plugin helps you to connect your MLflow model training experiments (and run
 
 You can use this plugin to:
 
+- Connect your MLflow experiments and runs to your FiftyOne datasets
 - Visualize the MLflow dashboard right beside your FiftyOne dataset in the FiftyOne App
 - Get helpful information about your MLflow runs and experiments in the FiftyOne App
 
@@ -27,7 +28,7 @@ You can use this plugin to:
 First, install the dependencies:
 
 ```bash
-pip install fiftyone mlflow
+pip install -U fiftyone mlflow
 ```
 
 Then, download the plugin:
@@ -40,136 +41,45 @@ fiftyone plugins download https://github.com/jacobmarks/fiftyone_mlflow_plugin
 
 Here is a basic template for using the plugin.
 
-First, set up MLflow experiment tracking, and load a FiftyOne dataset. Then import the `log_mlflow_run_to_fiftyone_dataset` function to log MLflow runs to your FiftyOne dataset.
+First, set your tracking URI as an environment variable:
+
+```bash
+export MLFLOW_TRACKING_URI="http://localhost:5000"
+```
+
+Next, start the MLflow server:
+
+```bash
+mlflow server --host 127.0.0.1 --port 5000
+```
+
+Load a FiftyOne dataset, and the `log_mlflow_run` operator:
 
 ```python
-import json
-from bson import json_util
-import sys
-import os
-
-
-import mlflow
-from mlflow import MlflowClient
-
-client = MlflowClient(tracking_uri="http://127.0.0.1:8080")
-
 import fiftyone as fo
-import fiftyone.zoo as foz
 import fiftyone.operators as foo
-import fiftyone.plugins as fop
-from fiftyone import ViewField as F
+import fiftyone.zoo as foz
 
 dataset = foz.load_zoo_dataset("quickstart")
 
 log_mlflow_run = foo.get_operator("@jacobmarks/mlflow_tracking/log_mlflow_run")
 ```
 
-Here are some functions that you may find useful:
+Run your experiment, and log the MLflow run to your FiftyOne dataset:
 
 ```python
-def serialize_view(view):
-    return json.loads(json_util.dumps(view._serialize()))
+experiment_name = "<your-experiment-name-here>"
+run_name = "<your-run-name-here>"
+label_field = "<your-label-field-here>"  ## if you have predictions associated with your run
 
-
-def experiment_exists(experiment_name):
-    return mlflow.get_experiment_by_name(experiment_name) is not None
-
-
-def create_fiftyone_mlflow_experiment(
-    experiment_name, sample_collection, experiment_description=None
-):
-    """
-    Create a new MLflow experiment for a FiftyOne sample collection.
-
-    Args:
-    - experiment_name: The name of the MLflow experiment to create
-    - sample_collection: A FiftyOne sample collection to use as the dataset for the experiment
-    - experiment_description: An optional description for the MLflow experiment
-    """
-
-    tags = {
-        "mlflow.note.content": experiment_description,
-        "dataset": sample_collection._dataset.name,
-    }
-    client.create_experiment(name=experiment_name, tags=tags)
-```
-
-And here is an example of a high-level loop (pseudocode) for logging MLflow runs to your FiftyOne dataset:
-
-```python
-def run_fiftyone_mlflow_experiment(
-    sample_collection,
-    model,
-    training_func,
-    experiment_name,
-    experiment_description=None,
-    apply_model_func=None,
-    add_predictions=True,
-):
-    """
-    Run an MLFlow experiment on a FiftyOne sample collection using the provided model and training function.
-
-    Args:
-    - sample_collection: A FiftyOne sample collection to use as the dataset for the experiment
-    - model: A model to train and log metrics for
-    - training_func: A function that trains the model and returns it
-    - experiment_name: The name of the MLflow experiment to create
-    - experiment_description: An optional description for the MLflow experiment
-    - apply_model_func: An optional function that applies the model to the sample collection
-    - add_predictions: Whether to add the model's predictions for the sample collection
-    """
-
-    if not experiment_exists(experiment_name):
-        create_fiftyone_mlflow_experiment(
-            experiment_name, sample_collection, experiment_description
-        )
-
-    mlflow.set_experiment(experiment_name)
-
-    # Train the model
-    with mlflow.start_run() as run:
-        if sample_collection._dataset != sample_collection:
-            ## log the serialized `DatasetView`
-            mlflow.log_param("dataset_view", serialize_view(sample_collection))
-
-        model = training_func(dataset)
-        mlflow.log_params(model.hyperparameters)
-        mlflow.log_metrics(model.metrics)
-
-        signature = infer_signature(X.numpy(), net(X).detach().numpy())
-        model_info = mlflow.pytorch.log_model(
-            model, "model", signature=signature
-        )
-
-        pytorch_pyfunc = mlflow.pyfunc.load_model(
-            model_uri=model_info.model_uri
-        )
-
-        dataset = sample_collection._dataset
-        if "runs" not in dataset.info["mlflow"]:
-            dataset.info["mlflow"]["runs"] = []
-            dataset.save()
-        dataset.info["mlflow"]["runs"].append(run.info.run_id)
-        dataset.save()
-
-        log_mlflow_run(
-            sample_collection, experiment_name, run_id=run.info.run_id
-        )
-
-    if add_predictions:
-        predictions_field = f"{run.info.run_id}_predictions"
-        apply_model_func(sample_collection, pytorch_pyfunc, predictions_field)
-```
-
-You can then run the experiment like this:
-
-```python
-model = "<insert model here>"
-training_func = "<insert training function here>"
-experiment_name = "test_experiment"
-experiment_description = "test experiment description"
-run_fiftyone_mlflow_experiment(
-    dataset, model, training_func, experiment_name, experiment_description
+log_mlflow_run(
+    dataset, experiment_name, run_name=run_name, predictions_field=label_field
 )
 ```
+
+In the FiftyOne App, you can now visualize your MLflow runs and experiments right beside your dataset
+using the `show_mlflow_run` operator, which will open the MLflow dashboard within the app
+(or change the state of the tab if it is already open), opening an iframe directly to the
+chosen experiment (and optionally run)!
+
+You can also get summary information about your MLflow runs and experiments using the `get_mlflow_experiment_info` operator.

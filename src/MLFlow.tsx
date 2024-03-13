@@ -11,6 +11,9 @@ import {
   MenuItem,
   Typography,
 } from "@mui/material";
+import { useRecoilState } from "recoil";
+import { iframeURLAtom } from "./State";
+import "./Operator";
 
 export const MLFlowIcon = ({ size = "1rem", style = {} }) => {
   return (
@@ -105,11 +108,11 @@ const URLInputForm = ({ onSubmit }) => {
 export default function MLFlowPanel() {
   const defaultUrl = "http://127.0.0.1:5000";
 
-  const getExperimentURLs = useOperatorExecutor(
-    "@jacobmarks/mlflow_tracking/get_mlflow_experiment_urls"
-  );
-
   const [experimentURLValue, setExperimentURLValue] = useState("");
+
+  const [iframeUrl, setIframeUrl] = useRecoilState(iframeURLAtom);
+
+  console.log("iframeUrl", iframeUrl);
 
   const handleExperimentURLChange = (event) => {
     console.log(event.target.value);
@@ -123,34 +126,6 @@ export default function MLFlowPanel() {
     setUrl(newUrl);
   };
 
-  useEffect(() => {
-    getExperimentURLs.execute();
-  }, []);
-
-  const experimentURLs = useMemo(() => {
-    return getExperimentURLs?.result?.urls;
-  }, [getExperimentURLs]);
-
-  const loadingExperimentURLs = useMemo(() => {
-    return getExperimentURLs?.isExecuting;
-  }, [getExperimentURLs]);
-
-  if (loadingExperimentURLs || Array.isArray(experimentURLs) === false) {
-    return (
-      <Box
-        sx={{
-          width: "100%",
-          height: "100%",
-          alignItems: "center",
-          display: "flex",
-          justifyContent: "center",
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
-
   return (
     <Stack
       sx={{
@@ -162,33 +137,6 @@ export default function MLFlowPanel() {
       spacing={1}
     >
       {!serverAvailable && <URLInputForm onSubmit={handleUpdateUrl} />}
-      {experimentURLs.length == 0 && <Box>No experiments found</Box>}
-      {experimentURLs.length > 1 && (
-        <Stack
-          direction="row"
-          spacing={2}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Typography variant="h6" gutterBottom>
-            Select an experiment on this dataset:
-          </Typography>
-          <Select
-            labelId="experiment-select-label"
-            id="experiment-select"
-            value={experimentURLValue}
-            onChange={handleExperimentURLChange}
-            size="small"
-            sx={{ minWidth: 300 }}
-          >
-            {experimentURLs.map((item) => (
-              <MenuItem key={item.url} value={item.url}>
-                {item.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </Stack>
-      )}
       <Box
         sx={{
           width: "95%",
@@ -198,6 +146,7 @@ export default function MLFlowPanel() {
           flexDirection: "column",
           justifyContent: "center",
         }}
+        key={iframeUrl || url}
       >
         <iframe
           style={{
@@ -206,7 +155,7 @@ export default function MLFlowPanel() {
             width: "100%",
             height: "100%",
           }}
-          src={experimentURLValue || url}
+          src={iframeUrl || url}
           title="MLFlow Embedded"
           allowFullScreen
         ></iframe>

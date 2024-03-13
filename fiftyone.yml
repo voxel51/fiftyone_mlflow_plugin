@@ -1,12 +1,15 @@
 name: "@jacobmarks/mlflow_tracking"
 description: Track model training experiments with MLflow!
-version: 0.1.6
+version: 0.1.7
 fiftyone:
   version: ">=0.23.7"
 license: Apache 2.0
 url: "https://github.com/jacobmarks/fiftyone_mlflow_plugin"
 operators:
   - open_mlflow_panel
-  - get_mlflow_experiment_urls
   - get_mlflow_experiment_info
   - log_mlflow_run
+  - set_iframe_url
+  - show_mlflow_run
+secrets:
+  - MLFLOW_TRACKING_URI

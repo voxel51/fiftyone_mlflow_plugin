@@ -5,18 +5,98 @@
 |
 """
 
+import json
+from bson import json_util
+
 import fiftyone.operators as foo
 import fiftyone.operators.types as types
 
 import mlflow
+
+DEFAULT_TRACKING_URI = "http://localhost:5000"
+
+
+def _get_tracking_uri(ctx):
+    for key, value in getattr(ctx, "secrets", {}).items():
+        if key == "MLFLOW_TRACKING_URI":
+            return value
+    else:
+        return DEFAULT_TRACKING_URI
+
+
+def _get_client(ctx):
+    uri = _get_tracking_uri(ctx)
+    client = mlflow.MlflowClient(tracking_uri=uri)
+    return client
+
+
+def _get_experiment_id_by_name(experiment_name, client):
+    return client.get_experiment_by_name(experiment_name).experiment_id
+
+
+def _get_run(ctx, experiment_name, client):
+    experiment_id = _get_experiment_id_by_name(experiment_name, client)
+    run_name = ctx.params.get("run_name", None)
+    if run_name:
+        run_id = client.search_runs(
+            [experiment_id], filter_string=f"run_name='{run_name}'"
+        )[0].info.run_id
+        return client.get_run(run_id)
+    else:
+        return mlflow.last_active_run()
+
+
+def _get_experiment_uri(ctx, experiment_name, client):
+    experiment_id = _get_experiment_id_by_name(experiment_name, client)
+    return f"{_get_tracking_uri(ctx)}/#/experiments/{experiment_id}"
+
+
+def _get_run_uri(ctx, experiment_name, run_id, client):
+    experiment_uri = _get_experiment_uri(ctx, experiment_name, client)
+    return f"{experiment_uri}/runs/{run_id}"
 
 
 def _format_run_name(run_name):
     return run_name.replace("-", "_")
 
 
+def serialize_view(view):
+    return json.loads(json_util.dumps(view._serialize()))
+
+
+def _get_gt_field(ctx, dataset):
+    if "gt_field" in ctx.params and ctx.params["gt_field"] is not None:
+        return ctx.params["gt_field"]
+    elif "ground_truth" in dataset.get_field_schema():
+        return "ground_truth"
+    else:
+        return None
+
+
+def _connect_predictions_to_run(
+    ctx, dataset, predictions_field, experiment_name, run_id, run_name, client
+):
+    ## Add run info to predictions field
+    field = dataset.get_field(predictions_field)
+    run_uri = _get_run_uri(ctx, experiment_name, run_id, client)
+    field.info = {
+        "experiment_name": experiment_name,
+        "run_name": run_name,
+        "url": run_uri,
+    }
+    field.save()
+
+    ## Add label_field to mlflow run tags
+    client.set_tag(run_id, "predictions_field", predictions_field)
+
+    ## Add ground truth field to mlflow run tags
+    gt_field = _get_gt_field(ctx, dataset)
+    if gt_field is not None:
+        client.set_tag(run_id, "gt_field", gt_field)
+
+
 def _initialize_fiftyone_run_for_mlflow_experiment(
-    dataset, experiment_name, tracking_uri=None
+    dataset, experiment_name, client
 ):
     """
     Initialize a new FiftyOne custom run given an MLflow experiment.
@@ -26,8 +106,7 @@ def _initialize_fiftyone_run_for_mlflow_experiment(
     - experiment_name: The name of the MLflow experiment to create the run for
     """
     experiment = mlflow.get_experiment_by_name(experiment_name)
-    tracking_uri = tracking_uri or "http://localhost:5000"
-
+    tracking_uri = client.tracking_uri
     config = dataset.init_run()
 
     config.method = "mlflow_experiment"
@@ -41,11 +120,9 @@ def _initialize_fiftyone_run_for_mlflow_experiment(
     dataset.register_run(experiment_name, config)
 
 
-def _fiftyone_experiment_run_exists(dataset, experiment_name):
-    return experiment_name in dataset.list_runs()
-
-
-def _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id):
+def _add_fiftyone_run_for_mlflow_run(
+    dataset, experiment_name, run_id, client, **kwargs
+):
     """
     Add an MLflow run to a FiftyOne custom run.
 
@@ -54,7 +131,7 @@ def _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id):
     - run_id: The MLflow run_id to add
     """
     run = mlflow.get_run(run_id)
-    run_name = run.data.tags["mlflow.runName"]
+    run_name = run.info.run_name
 
     config = dataset.init_run()
     config.method = "mlflow_run"
@@ -65,8 +142,19 @@ def _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id):
     config.artifact_uri = run.info.artifact_uri
     config.metrics = run.data.metrics
     config.tags = run.data.tags
+    config.tracking_uri = client.tracking_uri
 
-    dataset.register_run(_format_run_name(run_name), config)
+    if "predictions_field" in kwargs:
+        config.predictions_field = kwargs["predictions_field"]
+
+    fmt_run_name = _format_run_name(run_name)
+
+    dataset.register_run(fmt_run_name, config)
+
+    if "view" in kwargs:
+        results = dataset.init_run_results(fmt_run_name)
+        results.target_view = kwargs["view"]._serialize()
+        dataset.save_run_results(fmt_run_name, results, overwrite=True)
 
     ## add run to experiment
     experiment_run_info = dataset.get_run_info(experiment_name)
@@ -74,47 +162,115 @@ def _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id):
     dataset.update_run_config(experiment_name, experiment_run_info.config)
 
 
-def log_mlflow_run_to_fiftyone_dataset(
-    sample_collection, experiment_name, run_id=None
+def _is_subset_view(sample_collection):
+    """Checks if the sample collection is the entire dataset or a view"""
+    return sample_collection.view() != sample_collection._dataset.view()
+
+
+def _connect_dataset_to_experiment_if_necessary(
+    dataset, experiment_name, client
 ):
-    """
-    Log an MLflow run to a FiftyOne custom run.
+    experiment = client.get_experiment_by_name(experiment_name)
+    experiment_tags = experiment.tags
+    if "dataset_name" not in experiment_tags:
+        experiment_id = experiment.experiment_id
+        client.set_experiment_tag(experiment_id, "dataset_name", dataset.name)
 
-    Args:
-    - sample_collection: The FiftyOne `Dataset` or `DatasetView` used for the experiment
-    - experiment_name: The name of the MLflow experiment to create the run for
-    - run_id: The MLflow run_id to add
-    """
-    dataset = sample_collection._dataset
-
-    if not _fiftyone_experiment_run_exists(dataset, experiment_name):
+    # Create FiftyOne Custom Run for the experiment
+    if experiment_name not in dataset.list_runs():
         _initialize_fiftyone_run_for_mlflow_experiment(
-            dataset, experiment_name
+            dataset, experiment_name, client
         )
-    if run_id:
-        _add_fiftyone_run_for_mlflow_run(dataset, experiment_name, run_id)
 
 
-def get_candidate_experiments(dataset):
-    urls = []
-    name = dataset.name
-    mlflow_experiment_runs = [
-        dataset.get_run_info(r)
-        for r in dataset.list_runs()
-        if dataset.get_run_info(r).config.method == "mlflow_experiment"
+def log_mlflow_run(ctx):
+    client = _get_client(ctx)
+    dataset = ctx.dataset
+    view = ctx.view
+    predictions_field = ctx.params.get("predictions_field", None)
+    experiment_name = ctx.params.get("experiment", None)
+    run = _get_run(ctx, experiment_name, client)
+    run_name, run_id = run.info.run_name, run.info.run_id
+
+    _connect_dataset_to_experiment_if_necessary(
+        dataset, experiment_name, client
+    )
+
+    add_run_kwargs = {}
+
+    if (
+        predictions_field is not None
+        and predictions_field in dataset.get_field_schema()
+    ):
+        _connect_predictions_to_run(
+            ctx,
+            dataset,
+            predictions_field,
+            experiment_name,
+            run_id,
+            run_name,
+            client,
+        )
+        add_run_kwargs["predictions_field"] = predictions_field
+
+    is_subset = _is_subset_view(view)
+    if is_subset:
+        serial_view = serialize_view(view)
+        client.set_tag(run_id, "view", serial_view)
+
+    ## Add run to FiftyOne custom run
+    _add_fiftyone_run_for_mlflow_run(
+        dataset, experiment_name, run_id, client, **add_run_kwargs
+    )
+
+
+class LogMLflowRun(foo.Operator):
+    @property
+    def config(self):
+        _config = foo.OperatorConfig(
+            name="log_mlflow_run",
+            label="MLflow: Log MLflow run to the FiftyOne dataset",
+            dynamic=True,
+            unlisted=True,
+        )
+        return _config
+
+    def __call__(
+        self,
+        sample_collection,
+        experiment_name,
+        run_name=None,
+        predictions_field=None,
+        gt_field=None,
+    ):
+        dataset = sample_collection._dataset
+        view = sample_collection.view()
+        ctx = dict(view=view, dataset=dataset)
+        params = dict(
+            experiment=experiment_name,
+            run_name=run_name,
+            predictions_field=predictions_field,
+            gt_field=gt_field,
+        )
+        return foo.execute_operator(self.uri, ctx, params=params)
+
+    def execute(self, ctx):
+        log_mlflow_run(ctx)
+
+
+def get_candidate_experiment_names(ctx):
+    experiment_names = [
+        r
+        for r in ctx.dataset.list_runs()
+        if ctx.dataset.get_run_info(r).config.method == "mlflow_experiment"
     ]
+    return experiment_names
 
-    for mer in mlflow_experiment_runs:
-        cfg = mer.config
-        name = cfg.experiment_name
-        try:
-            uri = cfg.tracking_uri
-        except:
-            uri = "http://localhost:5000"
-        id = cfg.experiment_id
-        urls.append({"url": f"{uri}/#/experiments/{id}", "name": name})
 
-    return {"urls": urls}
+def get_candidate_run_names(ctx, experiment_name):
+    experiment_info = ctx.dataset.get_run_info(experiment_name)
+    experiment_runs = experiment_info.config.runs
+    return experiment_runs
 
 
 class OpenMLflowPanel(foo.Operator):
@@ -147,17 +303,97 @@ class OpenMLflowPanel(foo.Operator):
         )
 
 
-class GetMLflowExperimentURLs(foo.Operator):
+def _get_mlflow_url_input(ctx, inputs):
+    dataset = ctx.dataset
+
+
+class ShowMLflowRun(foo.Operator):
     @property
     def config(self):
         return foo.OperatorConfig(
-            name="get_mlflow_experiment_urls",
-            label="MLflow: Get experiment URLs",
-            unlisted=True,
+            name="show_mlflow_run",
+            label="Show MLflow run",
+            dynamic=True,
+            description=(
+                "View the data and metrics for an MLflow experiment/run"
+                ", all in one place!"
+            ),
         )
 
+    def resolve_input(self, ctx):
+        inputs = types.Object()
+
+        experiments = get_candidate_experiment_names(ctx)
+        if len(experiments) == 0:
+            inputs.view(
+                "warning",
+                types.Warning(
+                    label="No experiments",
+                    description="Tracking Server home page will be opened instead.",
+                ),
+            )
+            return types.Property(inputs)
+
+        exp_choices = types.DropdownView()
+        for experiment in experiments:
+            exp_choices.add_choice(experiment, label=experiment)
+        inputs.enum(
+            "experiment_name",
+            exp_choices.values(),
+            label="Experiment name",
+            description="The name of the MLflow experiment to display",
+            required=True,
+            view=types.DropdownView(),
+        )
+
+        experiment_name = ctx.params.get("experiment_name", None)
+        if experiment_name is not None:
+            runs = get_candidate_run_names(ctx, experiment_name)
+            run_choices = types.DropdownView()
+            for run in runs:
+                run_choices.add_choice(run, label=run)
+            inputs.enum(
+                "run_name",
+                run_choices.values(),
+                label="Run name",
+                description="The name of the MLflow run to display",
+                required=False,
+                view=types.DropdownView(),
+            )
+
+        return types.Property(inputs)
+
     def execute(self, ctx):
-        return get_candidate_experiments(ctx.dataset)
+        client = _get_client(ctx)
+        experiment_name = ctx.params.get("experiment_name", None)
+        run_name = ctx.params.get("run_name", None)
+        run = None
+        if experiment_name is None:
+            url = _get_tracking_uri(ctx)
+        elif run_name is None:
+            url = _get_experiment_uri(ctx, experiment_name, client)
+        else:
+            run = _get_run(ctx, experiment_name, client)
+            url = _get_run_uri(ctx, experiment_name, run.info.run_id, client)
+
+        if run is not None and "view" in run.data.tags:
+            fmt_run_name = _format_run_name(run_name)
+            result = ctx.dataset.load_run_results(fmt_run_name)
+            if result and "target_view" in result:
+                serial_view = result.target_view
+                ctx.trigger(
+                    "set_view",
+                    params=dict(view=serial_view),
+                )
+
+        ctx.trigger(
+            "@jacobmarks/mlflow_tracking/set_iframe_url",
+            params=dict(url=url),
+        )
+        ctx.trigger(
+            "open_panel",
+            params=dict(name="MLFlowPanel", layout="horizontal"),
+        )
 
 
 def _initialize_run_output():
@@ -235,37 +471,8 @@ class GetMLflowExperimentInfo(foo.Operator):
         return types.Property(outputs, view=view)
 
 
-class LogMLflowRun(foo.Operator):
-    @property
-    def config(self):
-        _config = foo.OperatorConfig(
-            name="log_mlflow_run",
-            label="MLflow: Log run to FiftyOne",
-            dynamic=True,
-            unlisted=True,
-        )
-        return _config
-
-    def __call__(self, sample_collection, experiment_name, run_id=None):
-        ctx = dict(view=sample_collection.view())
-        params = dict(
-            experiment_name=experiment_name,
-            run_id=run_id,
-        )
-        return foo.execute_operator(self.uri, ctx, params=params)
-
-    def execute(self, ctx):
-        sample_collection = ctx.view
-        experiment_name = ctx.params.get("experiment_name", None)
-        run_id = ctx.params.get("run_id", None)
-
-        log_mlflow_run_to_fiftyone_dataset(
-            sample_collection, experiment_name, run_id
-        )
-
-
 def register(p):
     p.register(OpenMLflowPanel)
-    p.register(GetMLflowExperimentURLs)
     p.register(GetMLflowExperimentInfo)
     p.register(LogMLflowRun)
+    p.register(ShowMLflowRun)

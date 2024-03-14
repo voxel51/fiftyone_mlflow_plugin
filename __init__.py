@@ -146,6 +146,8 @@ def _add_fiftyone_run_for_mlflow_run(
 
     if "predictions_field" in kwargs:
         config.predictions_field = kwargs["predictions_field"]
+    if "gt_field" in kwargs:
+        config.gt_field = kwargs["gt_field"]
 
     fmt_run_name = _format_run_name(run_name)
 
@@ -188,6 +190,7 @@ def log_mlflow_run(ctx):
     dataset = ctx.dataset
     view = ctx.view
     predictions_field = ctx.params.get("predictions_field", None)
+    gt_field = ctx.params.get("gt_field", None)
     experiment_name = ctx.params.get("experiment", None)
     run = _get_run(ctx, experiment_name, client)
     run_name, run_id = run.info.run_name, run.info.run_id
@@ -212,6 +215,9 @@ def log_mlflow_run(ctx):
             client,
         )
         add_run_kwargs["predictions_field"] = predictions_field
+
+    if gt_field is not None and gt_field in dataset.get_field_schema():
+        add_run_kwargs["gt_field"] = gt_field
 
     is_subset = _is_subset_view(view)
     if is_subset:
@@ -376,14 +382,22 @@ class ShowMLflowRun(foo.Operator):
             run = _get_run(ctx, experiment_name, client)
             url = _get_run_uri(ctx, experiment_name, run.info.run_id, client)
 
-        if run is not None and "view" in run.data.tags:
+        if run is not None:
             fmt_run_name = _format_run_name(run_name)
-            result = ctx.dataset.load_run_results(fmt_run_name)
-            if result and "target_view" in result:
-                serial_view = result.target_view
+            run_info = ctx.dataset.get_run_info(fmt_run_name)
+
+            keep_fields = []
+
+            if hasattr(run_info.config, "predictions_field"):
+                keep_fields.append(run_info.config.predictions_field)
+            if hasattr(run_info.config, "gt_field"):
+                keep_fields.append(run_info.config.gt_field)
+
+            if len(keep_fields) > 0:
+                view = ctx.dataset.select_fields(keep_fields)
                 ctx.trigger(
                     "set_view",
-                    params=dict(view=serial_view),
+                    params=dict(view=serialize_view(view)),
                 )
 
         ctx.trigger(

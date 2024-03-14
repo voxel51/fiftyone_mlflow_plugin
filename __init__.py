@@ -387,13 +387,12 @@ class ShowMLflowRun(foo.Operator):
             run_info = ctx.dataset.get_run_info(fmt_run_name)
 
             keep_fields = []
-
-            if hasattr(run_info.config, "predictions_field"):
-                keep_fields.append(run_info.config.predictions_field)
             if hasattr(run_info.config, "gt_field"):
                 keep_fields.append(run_info.config.gt_field)
 
-            if len(keep_fields) > 0:
+            if hasattr(run_info.config, "predictions_field"):
+                keep_fields.append(run_info.config.predictions_field)
+
                 view = ctx.dataset.select_fields(keep_fields)
                 ctx.trigger(
                     "set_view",

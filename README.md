@@ -34,7 +34,7 @@ pip install -U fiftyone mlflow
 Then, download the plugin:
 
 ```bash
-fiftyone plugins download https://github.com/jacobmarks/fiftyone_mlflow_plugin
+fiftyone plugins download https://github.com/voxel51/mlflow
 ```
 
 ## Usage
@@ -62,7 +62,7 @@ import fiftyone.zoo as foz
 
 dataset = foz.load_zoo_dataset("quickstart")
 
-log_mlflow_run = foo.get_operator("@jacobmarks/mlflow_tracking/log_mlflow_run")
+log_mlflow_run = foo.get_operator("@voxel51/mlflow/log_mlflow_run")
 ```
 
 Run your experiment, and log the MLflow run to your FiftyOne dataset:

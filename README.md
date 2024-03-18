@@ -34,7 +34,7 @@ pip install -U fiftyone mlflow
 Then, download the plugin:
 
 ```bash
-fiftyone plugins download https://github.com/voxel51/mlflow
+fiftyone plugins download https://github.com/voxel51/fiftyone_mlflow_plugin
 ```
 
 ## Usage

@@ -26,4 +26,4 @@ class SetIframeURL extends Operator {
   }
 }
 
-registerOperator(SetIframeURL, "@jacobmarks/mlflow_tracking");
+registerOperator(SetIframeURL, "@voxel51/mlflow");

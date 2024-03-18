@@ -400,7 +400,7 @@ class ShowMLflowRun(foo.Operator):
                 )
 
         ctx.trigger(
-            "@jacobmarks/mlflow_tracking/set_iframe_url",
+            "@voxel51/mlflow/set_iframe_url",
             params=dict(url=url),
         )
         ctx.trigger(

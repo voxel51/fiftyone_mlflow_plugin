@@ -294,7 +294,7 @@ class OpenMLflowPanel(foo.Operator):
         return types.Placement(
             types.Places.SAMPLES_GRID_SECONDARY_ACTIONS,
             types.Button(
-                label="Open MLFlow Panel",
+                label="Open MLflow Panel",
                 prompt=False,
                 icon="/assets/mlflow.svg",
             ),

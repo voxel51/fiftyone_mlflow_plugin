@@ -166,7 +166,7 @@ export default function MLFlowPanel() {
 
 registerComponent({
   name: "MLFlowPanel",
-  label: "MLFlow Dashboard",
+  label: "MLflow Dashboard",
   component: MLFlowPanel,
   type: PluginComponentType.Panel,
   Icon: () => <MLFlowIcon size={"1rem"} style={{ marginRight: "0.5rem" }} />,
